@@ -191,28 +191,33 @@ contract AaveSushi is IFlashLoanReceiver {
     }
 
     /**
-     * @dev Atomically swap your Aave collateral with SushiSwap.
-     * @param
-     */
-    /**
-        Consider calculating the proper amount needed to swap
-        Let's start out by just swapping all the collateral
+        Use an Aave flashloan to atomically swap Aave collateral asset A for Aave collateral asset B.
+        First, take a flashloan in asset A.
+        Then swap asset A to asset B using SushiSwap.
+        Then deposit asset B into Aave.
+        Then withdraw asset A from Aave in the exact amount needed to repay the flashloan.
 
+        To encode swap details, we currently push a Swap object to the stack, then pop it off at the
+        end of executeOperation. This could theoretically also be done by encoding it into `bytes calldata params`,
+        but for ease of use I've done it like this.
+
+        TODO: Enable more complex paths with more than two assets.
      */
     function swapCollateral(
         address currentAsset,
         address desiredAsset,
         uint loanAmount,
-        // uint amountInExact,
         uint amountOutMin
     ) public {
+
+        // Add swap information to storage, this will be used in executeOperation
         _swap = Swap({
             user: msg.sender,
             desiredAsset: desiredAsset,
             amountInExact: loanAmount,
             amountOutMin: amountOutMin
         });
-        bytes memory params = addressToBytes(_swap.desiredAsset);
+
         // Take out flashloan
         address[] memory assets = new address[](1);
         assets[0] = currentAsset;
@@ -227,7 +232,7 @@ contract AaveSushi is IFlashLoanReceiver {
             amounts,
             modes,
             address(0x0), // onBehalfOf, not used here
-            params,
+            bytes("0x0"), // params, not used here
             0 // referralCode
         );
     }
@@ -243,10 +248,11 @@ contract AaveSushi is IFlashLoanReceiver {
     }
 
     /**
-     * Swap flashloan tokens (current collateral) for desired collateral
-     * Deposit desired collateral on behalf of user
-     * Transfer current collateral aTokens and extract underlying tokens
-     * Approve current asset tokens for the Lending Pool to pull back
+        Use an Aave flashloan to atomically swap Aave collateral asset A for Aave collateral asset B.
+        First, take a flashloan in asset A.
+        Then swap asset A to asset B using SushiSwap.
+        Then deposit asset B into Aave.
+        Then withdraw asset A from Aave in the exact amount needed to repay the flashloan.
      */
     function executeOperation(
         address[] calldata assets,
@@ -255,16 +261,6 @@ contract AaveSushi is IFlashLoanReceiver {
         address initiator,
         bytes calldata params
     ) public override returns (bool) {
-
-        // _swap = Swap({
-        //     // user: msg.sender,
-        //     user: 0x4deB3EDD991Cfd2fCdAa6Dcfe5f1743F6E7d16A6,
-        //     desiredAsset: 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9,
-        //     amountInExact: 100,
-        //     amountOutMin: 1
-        // });
-
-        // address pairAddress = IUniswapV2Factory(sushiRouter.factory()).getPair(currentAsset, desiredAsset);
 
         { // scope to avoid stack too deep
         // Swap for desired collateral
@@ -285,11 +281,9 @@ contract AaveSushi is IFlashLoanReceiver {
         }
 
 
-        {
+        { // scope to avoid stack too deep
         // Deposit desired collateral
         uint desiredAmount = IERC20(_swap.desiredAsset).balanceOf(address(this));
-        uint aToken = IERC20(aAddress(_swap.desiredAsset)).balanceOf(_swap.user);
-        address addr = aAddress(_swap.desiredAsset);
         IERC20(_swap.desiredAsset).approve(address(LENDING_POOL), desiredAmount);
         LENDING_POOL.deposit(
             _swap.desiredAsset,
@@ -297,13 +291,10 @@ contract AaveSushi is IFlashLoanReceiver {
             _swap.user,
             0
         );
-        uint desiredAmountAfterDeposit = IERC20(_swap.desiredAsset).balanceOf(address(this));
-        uint aTokenAfterDeposit = IERC20(aAddress(_swap.desiredAsset)).balanceOf(_swap.user);
-        uint foo = 3;
         }
 
         // Withdraw current collateral, enough to cover flashloan plus premium
-        uint loanPlusPremium = amounts[0] + premiums[0] + 1000;
+        uint loanPlusPremium = amounts[0] + premiums[0];
         address aCurrent = aAddress(assets[0]);
         require(
             IERC20(aCurrent).balanceOf(_swap.user) >= loanPlusPremium,
@@ -326,7 +317,7 @@ contract AaveSushi is IFlashLoanReceiver {
         // For manual testing before adding the flashloan back
         // IERC20(assets[0]).transfer(address(LENDING_POOL), loanPlusPremium);
 
-        // Zero out the stack
+        // Remove the swap information from storage
         delete _swap;
 
         return true;

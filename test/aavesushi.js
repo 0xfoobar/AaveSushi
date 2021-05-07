@@ -21,13 +21,15 @@ contract('AaveSushi', (accounts) => {
 
     const ether = 1000000000000000000;
 
-    async function printState(contract) {
+    /*
+     * Print the balances of user and contract accounts in various currencies used.
+     * Helpful for debugging; migrate this to a true automated unit test before deployment.
+     */
+    async function getBalances(contract) {
         wethBalance = web3.utils.fromWei(await weth.methods.balanceOf(unlockedAccount).call(), "ether");
         aaveBalance = web3.utils.fromWei(await aave.methods.balanceOf(unlockedAccount).call(), "ether");
         awethBalance = web3.utils.fromWei(await aweth.methods.balanceOf(unlockedAccount).call(), "ether");
         aaaveBalance = web3.utils.fromWei(await aaave.methods.balanceOf(unlockedAccount).call(), "ether");
-        // console.log(wethBalance);
-        // console.log(aaveBalance);
         console.log(`aWeth (user): ${awethBalance}`);
         console.log(`aAave (user): ${aaaveBalance}`);
 
@@ -41,6 +43,14 @@ contract('AaveSushi', (accounts) => {
         console.log(`aave (contract): ${aaveBalance}`);
     }
 
+    /*
+     * Call the swapCollateral method, which takes out a flashloan and calls executeOperation.
+     * If swapping collateral A to collateral B, the path is as follows:
+     * Flashloan A
+     * Swap A to B
+     * Deposit B
+     * Withdraw enough A to pay off flashloan (loan + premium)
+     */
     it("should call flashloan", async () => {
         const instance = await AaveSushi.deployed();
 
@@ -52,21 +62,10 @@ contract('AaveSushi', (accounts) => {
         let tx;
 
         console.log("Start state");
-        await printState(instance.contract._address);
+        await getBalances(instance.contract._address);
 
-        loanAmount = 1000;
-        // amountInExact = 1000;
-
-        loanAmount = 1000000000000000;
-        loanAmount = "1000000000000000"; // 15 zeroes
         loanAmount = "1000000000000000000"; // 18 zeroes; 1 eth
-        // loanAmount = "9000000000000000000"; // 18 zeroes, 199 eth
-        // loanAmount = "1000000000000000000000"; // Fails bc account doesn't have this much
-        // loanAmount = "100401858857524954751512";
-
-        // amountInExact = loanAmount;
-
-        loanPlusPremium = "2000000000000000000";
+        loanPlusPremium = "1100000000000000000"; // slight overestimate to avoid counting many zeroes
 
         tx = await aweth.methods.approve(instance.contract._address, loanPlusPremium).send({
             "from": unlockedAccount
@@ -84,11 +83,24 @@ contract('AaveSushi', (accounts) => {
         });
         console.log("Called swapCollateral");
 
+        console.log("End state");
+        await getBalances(instance.contract._address);
+
+    });
+
+    /**
+     * Simulate a flashloan, but call executeOperation directly as a top-level function.
+     * Helpful for debugging, but ignore when testing for prod deployments.
+     */
+    // it("should simulate a flashloan by sending WETH and calling executeOperation directly", async () => {
         // Simulate a flashloan with no premium
-        // tx = await weth.methods.approve(sushiAddress, amountInExact).send({
+
+        // let loanPlusPremium = "2000000000000000000";
+
+        // tx = await aweth.methods.approve(instance.contract._address, loanPlusPremium).send({
         //     "from": unlockedAccount
         // });
-        // console.log("Approved WETH for sushiRouter");
+        // console.log("Approved aWETH for AaveSushi");
 
         // // Then call the flashloan callback
         // tx = await weth.methods.transfer(instance.contract._address, loanAmount).send({
@@ -115,10 +127,6 @@ contract('AaveSushi', (accounts) => {
         // });
         // // console.log(tx);
         // console.log(`Called executeOperation: ${tx.transactionHash}`);
-
-        console.log("End state");
-        await printState(instance.contract._address);
-
-    });
+    // });
 
 });
