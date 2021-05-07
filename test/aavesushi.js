@@ -9,7 +9,7 @@ contract('AaveSushi', (accounts) => {
     wethAddress = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     awethAddress = "0x030bA81f1c18d280636F32af80b9AAd02Cf0854e";
     aaveAddress = "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9";
-    aaaveAddress = "0xba3D9687Cf50fE253cd2e1cFeEdE1d6787344Ed5"
+    aaaveAddress = "0xFFC97d72E13E01096502Cb8Eb52dEe56f74DAD7B";
     sushiAddress = "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F";
 
     const erc20Abi = JSON.parse('[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"guy","type":"address"},{"name":"wad","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"src","type":"address"},{"name":"dst","type":"address"},{"name":"wad","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"wad","type":"uint256"}],"name":"withdraw","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"dst","type":"address"},{"name":"wad","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[],"name":"deposit","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"},{"name":"","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"payable":true,"stateMutability":"payable","type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"src","type":"address"},{"indexed":true,"name":"guy","type":"address"},{"indexed":false,"name":"wad","type":"uint256"}],"name":"Approval","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"src","type":"address"},{"indexed":true,"name":"dst","type":"address"},{"indexed":false,"name":"wad","type":"uint256"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"dst","type":"address"},{"indexed":false,"name":"wad","type":"uint256"}],"name":"Deposit","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"src","type":"address"},{"indexed":false,"name":"wad","type":"uint256"}],"name":"Withdrawal","type":"event"}]');
@@ -21,15 +21,24 @@ contract('AaveSushi', (accounts) => {
 
     const ether = 1000000000000000000;
 
-    async function printState() {
+    async function printState(contract) {
         wethBalance = web3.utils.fromWei(await weth.methods.balanceOf(unlockedAccount).call(), "ether");
         aaveBalance = web3.utils.fromWei(await aave.methods.balanceOf(unlockedAccount).call(), "ether");
         awethBalance = web3.utils.fromWei(await aweth.methods.balanceOf(unlockedAccount).call(), "ether");
         aaaveBalance = web3.utils.fromWei(await aaave.methods.balanceOf(unlockedAccount).call(), "ether");
-        console.log(wethBalance);
-        console.log(aaveBalance);
-        console.log(awethBalance);
-        console.log(aaaveBalance);
+        // console.log(wethBalance);
+        // console.log(aaveBalance);
+        console.log(`aWeth (user): ${awethBalance}`);
+        console.log(`aAave (user): ${aaaveBalance}`);
+
+        wethBalance = web3.utils.fromWei(await weth.methods.balanceOf(contract).call(), "ether");
+        aaveBalance = web3.utils.fromWei(await aave.methods.balanceOf(contract).call(), "ether");
+        awethBalance = web3.utils.fromWei(await aweth.methods.balanceOf(contract).call(), "ether");
+        aaaveBalance = web3.utils.fromWei(await aaave.methods.balanceOf(contract).call(), "ether");
+        console.log(`aWeth (contract): ${awethBalance}`);
+        console.log(`aAave (contract): ${aaaveBalance}`);
+        console.log(`weth (contract): ${wethBalance}`);
+        console.log(`aave (contract): ${aaveBalance}`);
     }
 
     it("should call flashloan", async () => {
@@ -42,10 +51,11 @@ contract('AaveSushi', (accounts) => {
         let amountOutMin = 1;
         let tx;
 
-        await printState();
+        console.log("Start state");
+        await printState(instance.contract._address);
 
         loanAmount = 1000;
-        amountInExact = 1000;
+        // amountInExact = 1000;
 
         loanAmount = 1000000000000000;
         loanAmount = "1000000000000000"; // 15 zeroes
@@ -54,6 +64,8 @@ contract('AaveSushi', (accounts) => {
         // loanAmount = "1000000000000000000000"; // Fails bc account doesn't have this much
         // loanAmount = "100401858857524954751512";
 
+        // amountInExact = loanAmount;
+
         loanPlusPremium = "2000000000000000000";
 
         tx = await aweth.methods.approve(instance.contract._address, loanPlusPremium).send({
@@ -61,50 +73,51 @@ contract('AaveSushi', (accounts) => {
         });
         console.log("Approved aWETH for AaveSushi");
 
-        // tx = await instance.contract.methods.swapCollateral(
-        //     wethAddress,
-        //     aaveAddress,
-        //     loanAmount,
-        //     amountInExact,
-        //     amountOutMin
-        // ).send({
-        //     "from": unlockedAccount,
-        //     "gasLimit": 5000000
-        // });
-        // console.log("Called swapCollateral");
-
-        // Simulate a flashloan with no premium
-        tx = await weth.methods.approve(sushiAddress, amountInExact).send({
-            "from": unlockedAccount
-        });
-        console.log("Approved WETH for sushiRouter");
-
-        // Then call the flashloan callback
-        tx = await weth.methods.transfer(instance.contract._address, loanAmount).send({
-            "from": wethHolder,
-        });
-        console.log("Transferred WETH to contract address");
-
-        let assets = [wethAddress];
-        let amounts = [loanAmount];
-        let premiums = [0];
-
-        console.log(`assets: ${assets}`);
-        console.log(`amounts: ${amounts}`);
-        console.log(`premiums: ${premiums}`);
-        tx = await instance.contract.methods.executeOperation(
-            assets,
-            amounts,
-            premiums,
-            unlockedAccount,
-            "0x"
+        tx = await instance.contract.methods.swapCollateral(
+            wethAddress,
+            aaveAddress,
+            loanAmount,
+            amountOutMin
         ).send({
             "from": unlockedAccount,
             "gasLimit": 5000000
         });
-        console.log("Called executeOperation");
+        console.log("Called swapCollateral");
 
-        await printState();
+        // Simulate a flashloan with no premium
+        // tx = await weth.methods.approve(sushiAddress, amountInExact).send({
+        //     "from": unlockedAccount
+        // });
+        // console.log("Approved WETH for sushiRouter");
+
+        // // Then call the flashloan callback
+        // tx = await weth.methods.transfer(instance.contract._address, loanAmount).send({
+        //     "from": wethHolder,
+        // });
+        // console.log("Transferred WETH to contract address");
+
+        // let assets = [wethAddress];
+        // let amounts = [loanAmount];
+        // let premiums = [0];
+
+        // console.log(`assets: ${assets}`);
+        // console.log(`amounts: ${amounts}`);
+        // console.log(`premiums: ${premiums}`);
+        // tx = await instance.contract.methods.executeOperation(
+        //     assets,
+        //     amounts,
+        //     premiums,
+        //     unlockedAccount,
+        //     "0x"
+        // ).send({
+        //     "from": unlockedAccount,
+        //     "gasLimit": 5000000
+        // });
+        // // console.log(tx);
+        // console.log(`Called executeOperation: ${tx.transactionHash}`);
+
+        console.log("End state");
+        await printState(instance.contract._address);
 
     });
 

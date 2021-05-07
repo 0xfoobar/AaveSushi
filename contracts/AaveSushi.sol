@@ -203,13 +203,13 @@ contract AaveSushi is IFlashLoanReceiver {
         address currentAsset,
         address desiredAsset,
         uint loanAmount,
-        uint amountInExact,
+        // uint amountInExact,
         uint amountOutMin
     ) public {
         _swap = Swap({
             user: msg.sender,
             desiredAsset: desiredAsset,
-            amountInExact: amountInExact,
+            amountInExact: loanAmount,
             amountOutMin: amountOutMin
         });
         bytes memory params = addressToBytes(_swap.desiredAsset);
@@ -256,15 +256,14 @@ contract AaveSushi is IFlashLoanReceiver {
         bytes calldata params
     ) public override returns (bool) {
 
-        _swap = Swap({
-            // user: msg.sender,
-            user: 0x4deB3EDD991Cfd2fCdAa6Dcfe5f1743F6E7d16A6,
-            desiredAsset: 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9,
-            amountInExact: 100,
-            amountOutMin: 1
-        });
+        // _swap = Swap({
+        //     // user: msg.sender,
+        //     user: 0x4deB3EDD991Cfd2fCdAa6Dcfe5f1743F6E7d16A6,
+        //     desiredAsset: 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9,
+        //     amountInExact: 100,
+        //     amountOutMin: 1
+        // });
 
-        // require(false);
         // address pairAddress = IUniswapV2Factory(sushiRouter.factory()).getPair(currentAsset, desiredAsset);
 
         { // scope to avoid stack too deep
@@ -276,7 +275,8 @@ contract AaveSushi is IFlashLoanReceiver {
 
         IERC20(assets[0]).approve(address(sushiRouter), amounts[0]);
         sushiRouter.swapExactTokensForTokens(
-            _swap.amountInExact,
+            // _swap.amountInExact,
+            amounts[0],
             _swap.amountOutMin,
             data,
             address(this),
@@ -285,9 +285,11 @@ contract AaveSushi is IFlashLoanReceiver {
         }
 
 
+        {
         // Deposit desired collateral
         uint desiredAmount = IERC20(_swap.desiredAsset).balanceOf(address(this));
-        require(false);
+        uint aToken = IERC20(aAddress(_swap.desiredAsset)).balanceOf(_swap.user);
+        address addr = aAddress(_swap.desiredAsset);
         IERC20(_swap.desiredAsset).approve(address(LENDING_POOL), desiredAmount);
         LENDING_POOL.deposit(
             _swap.desiredAsset,
@@ -295,9 +297,13 @@ contract AaveSushi is IFlashLoanReceiver {
             _swap.user,
             0
         );
+        uint desiredAmountAfterDeposit = IERC20(_swap.desiredAsset).balanceOf(address(this));
+        uint aTokenAfterDeposit = IERC20(aAddress(_swap.desiredAsset)).balanceOf(_swap.user);
+        uint foo = 3;
+        }
 
         // Withdraw current collateral, enough to cover flashloan plus premium
-        uint loanPlusPremium = amounts[0] + premiums[0];
+        uint loanPlusPremium = amounts[0] + premiums[0] + 1000;
         address aCurrent = aAddress(assets[0]);
         require(
             IERC20(aCurrent).balanceOf(_swap.user) >= loanPlusPremium,
